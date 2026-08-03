@@ -99,6 +99,33 @@ class EuVatCandeRepository @Inject() (@NamedDatabase("euvat") db: Database)(impl
     }
   }
 
+  def getSupplierTaxIdentifierDuplicateCount(
+    request: uk.gov.hmrc.rdscandeproxy.euvat.models.requests.SupplierTaxIdentifierCountRequest
+  ): Future[Int] = {
+    logger.info(
+      s"Calling stored procedure getSupplierTaxIdentifierCount for applicationId: ${request.applicationId} itemNumber: ${request.itemNumber}"
+    )
+    Future {
+      db.withConnection { connection =>
+        Using.resource(connection.prepareCall("{call EUVAT_FILE_DATA.EU_VAT_RETRIEVAL.getSupplierTaxIdentifierCount(?, ?, ?, ?, ?)}")) {
+          storedProcedure =>
+            // input params
+            storedProcedure.setInt("p_application_id", request.applicationId)
+            storedProcedure.setInt("p_item_number", request.itemNumber)
+            storedProcedure.setString("p_supplier_tax_identifier", request.taxIdentifier)
+            storedProcedure.setString("p_invoice_number", request.invoiceNumber)
+
+            // out param
+            storedProcedure.registerOutParameter("p_count", OracleTypes.NUMBER)
+
+            storedProcedure.execute()
+
+            storedProcedure.getInt("p_count")
+        }
+      }
+    }
+  }
+
   def addApplication(applicationRequest: ApplicationRequest, vrn: String): Future[ApplicationResponse] = {
     logger.info(s"************* calling stored procedure to create application for VRN: $vrn")
     Future {

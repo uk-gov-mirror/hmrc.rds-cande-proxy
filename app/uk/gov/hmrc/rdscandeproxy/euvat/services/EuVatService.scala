@@ -36,4 +36,9 @@ class EuVatService @Inject() (euvatCandeRepository: EuVatCandeRepository) {
   def addPurchase(purchaseRequest: AddPurchaseRequest): Future[AddPurchaseResponse] =
     euvatCandeRepository.addPurchase(purchaseRequest)
 
+  def getSupplierTaxIdentifierDuplicateCount(
+    request: uk.gov.hmrc.rdscandeproxy.euvat.models.requests.SupplierTaxIdentifierCountRequest
+  ): Future[Int] =
+    euvatCandeRepository.getSupplierTaxIdentifierDuplicateCount(request)
+
 }

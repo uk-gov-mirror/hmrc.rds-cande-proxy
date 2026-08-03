@@ -149,3 +149,24 @@ class EuVatServiceSpec extends AnyWordSpec with Matchers with ScalaFutures with 
         val result = intercept[Exception](service.addPurchase(purchaseRequest).futureValue)
         result.getMessage should include("bang")
   }
+
+  "EuVatService.getSupplierTaxIdentifierDuplicateCount" should {
+    val req = uk.gov.hmrc.rdscandeproxy.euvat.models.requests.SupplierTaxIdentifierCountRequest(
+      applicationId = 133,
+      itemNumber    = 4,
+      taxIdentifier = "500000881",
+      invoiceNumber = "a444"
+    )
+
+    "succeed" in {
+      when(mockConnector.getSupplierTaxIdentifierDuplicateCount(any())).thenReturn(Future.successful(4))
+      val result = service.getSupplierTaxIdentifierDuplicateCount(req).futureValue
+      result shouldBe 4
+    }
+
+    "fail" in {
+      when(mockConnector.getSupplierTaxIdentifierDuplicateCount(any())).thenReturn(Future.failed(new Exception("bang")))
+      val result = intercept[Exception](service.getSupplierTaxIdentifierDuplicateCount(req).futureValue)
+      result.getMessage should include("bang")
+    }
+  }

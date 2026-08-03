@@ -144,6 +144,55 @@ class EuVatControllerSpec extends SpecBase with MockitoSugar {
         contentAsString(result) should include("Failed to add purchase")
       }
     }
+
+    "getSupplierTaxIdentifierCount" - {
+      "return 200 with JSON when service returns count" in new SetUp {
+        when(mockEuVatService.getSupplierTaxIdentifierDuplicateCount(any()))
+          .thenReturn(Future.successful(4))
+
+        val json = Json.obj(
+          "applicationId" -> 133,
+          "itemNumber"    -> 4,
+          "taxIdentifier" -> "500000881",
+          "invoiceNumber" -> "a444"
+        )
+
+        val result: Future[Result] = controller.getSupplierTaxIdentifierCount()(
+          fakeRequest.withMethod("POST").withJsonBody(json)
+        )
+
+        status(result)        shouldBe OK
+        contentAsJson(result) shouldBe Json.obj("duplicateCount" -> 4)
+      }
+
+      "return 400 when request body is invalid" in new SetUp {
+        val result: Future[Result] = controller.getSupplierTaxIdentifierCount()(
+          fakeRequest.withMethod("POST").withJsonBody(Json.obj("invalid" -> "body"))
+        )
+
+        status(result) shouldBe BAD_REQUEST
+      }
+
+      "return 500 when service throws exception" in new SetUp {
+        when(mockEuVatService.getSupplierTaxIdentifierDuplicateCount(any()))
+          .thenReturn(Future.failed(new RuntimeException("DB error")))
+
+        val json = Json.obj(
+          "applicationId" -> 133,
+          "itemNumber"    -> 4,
+          "taxIdentifier" -> "500000881",
+          "invoiceNumber" -> "a444"
+        )
+
+        val result: Future[Result] = controller.getSupplierTaxIdentifierCount()(
+          fakeRequest.withMethod("POST").withJsonBody(json)
+        )
+
+        status(result)        shouldBe INTERNAL_SERVER_ERROR
+        contentAsString(result) should include("Failed to retrieve duplicate count")
+      }
+    }
+
   }
 
   private class SetUp {

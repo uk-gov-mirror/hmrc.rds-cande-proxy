@@ -21,8 +21,9 @@ import play.api.libs.json.Json
 import play.api.mvc.{Action, AnyContent, ControllerComponents}
 import uk.gov.hmrc.play.bootstrap.backend.controller.BackendController
 import uk.gov.hmrc.rdscandeproxy.euvat.actions.AuthAction
-import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.{AddPurchaseRequest, ApplicationRequest, LatestApplicationRequest}
+import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.{AddPurchaseRequest, ApplicationRequest, LatestApplicationRequest, SupplierTaxIdentifierCountRequest}
 import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.ApplicationResponse
+import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.DuplicateCountResponse
 import uk.gov.hmrc.rdscandeproxy.euvat.services.EuVatService
 
 import javax.inject.Inject
@@ -88,6 +89,25 @@ class EuVatController @Inject() (authorise: AuthAction, euVatService: EuVatServi
             .recover { case ex: Exception =>
               logger.error("Error while adding the purchase", ex)
               InternalServerError("Failed to add purchase")
+            }
+      }
+    }
+
+  def getSupplierTaxIdentifierCount: Action[AnyContent] =
+    authorise.async { implicit request =>
+      request.body.asJson.flatMap(_.asOpt[SupplierTaxIdentifierCountRequest]) match {
+        case None =>
+          logger.warn("Invalid JSON for SupplierTaxIdentifierCountRequest")
+          Future.successful(BadRequest("Invalid request body"))
+        case Some(req) =>
+          euVatService
+            .getSupplierTaxIdentifierDuplicateCount(req)
+            .map { count =>
+              Ok(Json.toJson(DuplicateCountResponse(count)))
+            }
+            .recover { case ex: Exception =>
+              logger.error("Error while retrieving duplicate count", ex)
+              InternalServerError("Failed to retrieve duplicate count")
             }
       }
     }

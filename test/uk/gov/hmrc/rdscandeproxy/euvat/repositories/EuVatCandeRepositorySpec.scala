@@ -183,4 +183,20 @@ class EuVatCandeRepositorySpec extends AnyFlatSpec with Matchers with BeforeAndA
     result shouldBe purchaseResponse
   }
 
+  "getSupplierTaxIdentifierDuplicateCount" should "return the duplicate count from proc" in {
+    val req = uk.gov.hmrc.rdscandeproxy.euvat.models.requests.SupplierTaxIdentifierCountRequest(
+      applicationId = 133,
+      itemNumber    = 4,
+      taxIdentifier = "500000881",
+      invoiceNumber = "a444"
+    )
+
+    // Mock output parameter
+    when(mockCallableStatement.getInt("p_count")).thenReturn(4)
+
+    val result = repository.getSupplierTaxIdentifierDuplicateCount(req).futureValue
+
+    result shouldBe 4
+  }
+
 }
