@@ -22,8 +22,8 @@ import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatestplus.mockito.MockitoSugar
-import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.{AddPurchaseRequest, AddPurchaseResponse, ApplicationRequest, LatestApplicationRequest, SupplierVrnCountRequest}
-import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.{ApplicationResponse, LatestApplicationResponse, SupplierVrnCountResponse}
+import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.*
+import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.*
 import uk.gov.hmrc.rdscandeproxy.euvat.repositories.EuVatCandeRepository
 
 import java.time.LocalDateTime
@@ -190,6 +190,42 @@ class EuVatServiceSpec extends AnyWordSpec with Matchers with ScalaFutures with 
     "fail" in {
       when(mockConnector.getSupplierTaxIdentifierDuplicateCount(any())).thenReturn(Future.failed(new Exception("bang")))
       val result = intercept[Exception](service.getSupplierTaxIdentifierDuplicateCount(req).futureValue)
+      result.getMessage should include("bang")
+    }
+  }
+
+  "EuVatService.updatePurchaseDetails" should {
+    val req = UpdatePurchaseDetailsRequest(
+      applicationId               = 404,
+      itemNumber                  = 4,
+      goodsDescriptionCategory    = "10",
+      goodsDescriptionSubCategory = Some("10.4.1"),
+      goodsDescriptionText        = Some("office stationery and consumables"),
+      simplifiedInvoiceIndicator  = Some("N"),
+      supplierName                = Some("Finnish International"),
+      supplierAddress1            = Some("356 High Street"),
+      supplierAddress2            = Some("Rochdale"),
+      supplierAddress3            = Some("England"),
+      supplierVatRegNumber        = Some("500000881"),
+      supplierTaxIdentifier       = Some(""),
+      invoiceDate                 = Some(LocalDateTime.of(2026, 5, 14, 0, 0)),
+      invoiceNumber               = Some("a444"),
+      currencyCode                = Some("EUR"),
+      taxableAmount               = Some(BigDecimal(1000)),
+      vatAmount                   = Some(BigDecimal(99)),
+      deductibleVatAmount         = Some(BigDecimal(40)),
+      updateSequenceNumber        = 1
+    )
+
+    "succeed" in {
+      when(mockConnector.updatePurchaseDetails(any())).thenReturn(Future.successful(2))
+      val result = service.updatePurchaseDetails(req).futureValue
+      result shouldBe UpdatePurchaseDetailsResponse(2)
+    }
+
+    "fail" in {
+      when(mockConnector.updatePurchaseDetails(any())).thenReturn(Future.failed(new Exception("bang")))
+      val result = intercept[Exception](service.updatePurchaseDetails(req).futureValue)
       result.getMessage should include("bang")
     }
   }

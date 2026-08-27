@@ -19,10 +19,10 @@ package uk.gov.hmrc.rdscandeproxy.euvat.repositories
 import oracle.jdbc.OracleTypes
 import play.api.Logging
 import play.api.db.{Database, NamedDatabase}
-import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.{AddPurchaseRequest, AddPurchaseResponse, ApplicationRequest, LatestApplicationRequest, SupplierVrnCountRequest}
-import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.{ApplicationResponse, LatestApplication, LatestApplicationResponse, SupplierVrnCountResponse}
+import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.*
+import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.*
 
-import java.sql.ResultSet
+import java.sql.{Connection, ResultSet}
 import java.time.LocalDateTime
 import javax.inject.Inject
 import scala.concurrent.{ExecutionContext, Future}
@@ -227,4 +227,125 @@ class EuVatCandeRepository @Inject() (@NamedDatabase("euvat") db: Database)(impl
     }
   }
 
+  private def callUpdatePurchaseDetailsSPWithConn(
+    connection: Connection,
+    request: uk.gov.hmrc.rdscandeproxy.euvat.models.requests.UpdatePurchaseDetailsRequest,
+    currentSeq: Int
+  ): Int = {
+    logger.info(s"Calling stored procedure updatePurchaseDetails for application: ${request.applicationId} item: ${request.itemNumber}")
+    Using.resource(
+      connection.prepareCall(
+        "{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseDetails(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"
+      )
+    ) { storedProcedure =>
+      storedProcedure.setLong("p_application_id", request.applicationId)
+      storedProcedure.setInt("p_item_number", request.itemNumber)
+      storedProcedure.setString("p_simplified_invoice_indicator", request.simplifiedInvoiceIndicator.orNull)
+      storedProcedure.setString("p_supplier_name", request.supplierName.orNull)
+      storedProcedure.setString("p_supplier_address_1", request.supplierAddress1.orNull)
+      storedProcedure.setString("p_supplier_address_2", request.supplierAddress2.orNull)
+      storedProcedure.setString("p_supplier_address_3", request.supplierAddress3.orNull)
+      storedProcedure.setString("p_supplier_vat_reg_number", request.supplierVatRegNumber.orNull)
+      storedProcedure.setString("p_supplier_tax_identifier", request.supplierTaxIdentifier.orNull)
+      request.invoiceDate match {
+        case Some(dt) => storedProcedure.setDate("p_invoice_date", java.sql.Date.valueOf(dt.toLocalDate))
+        case None     => storedProcedure.setNull("p_invoice_date", java.sql.Types.DATE)
+      }
+      storedProcedure.setString("p_invoice_number", request.invoiceNumber.orNull)
+      storedProcedure.setString("p_currency_code", request.currencyCode.orNull)
+      request.taxableAmount match {
+        case Some(amount) => storedProcedure.setBigDecimal("p_taxable_amount", amount.bigDecimal)
+        case None         => storedProcedure.setNull("p_taxable_amount", java.sql.Types.NUMERIC)
+      }
+      request.vatAmount match {
+        case Some(amount) => storedProcedure.setBigDecimal("p_vat_amount", amount.bigDecimal)
+        case None         => storedProcedure.setNull("p_vat_amount", java.sql.Types.NUMERIC)
+      }
+      request.deductibleVatAmount match {
+        case Some(amount) => storedProcedure.setBigDecimal("p_deductible_vat_amount", amount.bigDecimal)
+        case None         => storedProcedure.setNull("p_deductible_vat_amount", java.sql.Types.NUMERIC)
+      }
+      storedProcedure.setInt("p_update_seq_number", currentSeq)
+      storedProcedure.registerOutParameter("p_update_seq_number", java.sql.Types.INTEGER)
+      storedProcedure.execute()
+      storedProcedure.getInt("p_update_seq_number")
+    }
+  }
+
+  private def updatePurchaseSubCategoryWithConn(connection: Connection,
+                                                applicationId: Long,
+                                                itemNumber: Int,
+                                                purchaseSubcategory: String,
+                                                updateSeqNumber: Int
+                                               ): Int = {
+    Using.resource(connection.prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseSubCategory(?, ?, ?, ?)}")) { storedProcedure =>
+      storedProcedure.setLong("p_application_id", applicationId)
+      storedProcedure.setInt("p_item_number", itemNumber)
+      storedProcedure.setString("p_purchase_subcategory", purchaseSubcategory)
+      storedProcedure.setInt("p_update_seq_number", updateSeqNumber)
+      storedProcedure.registerOutParameter("p_update_seq_number", java.sql.Types.INTEGER)
+      storedProcedure.execute()
+      storedProcedure.getInt("p_update_seq_number")
+    }
+  }
+
+  private def updatePurchaseDescriptionWithConn(connection: Connection,
+                                                applicationId: Long,
+                                                itemNumber: Int,
+                                                purchaseDescription: String,
+                                                updateSeqNumber: Int
+                                               ): Int = {
+    Using.resource(connection.prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseDescription(?, ?, ?, ?)}")) { storedProcedure =>
+      storedProcedure.setLong("p_application_id", applicationId)
+      storedProcedure.setInt("p_item_number", itemNumber)
+      storedProcedure.setString("p_goods_description_text", purchaseDescription)
+      storedProcedure.setInt("p_update_seq_number", updateSeqNumber)
+      storedProcedure.registerOutParameter("p_update_seq_number", java.sql.Types.INTEGER)
+      storedProcedure.execute()
+      storedProcedure.getInt("p_update_seq_number")
+    }
+  }
+
+  private def updatePurchaseCategoryWithConn(connection: Connection,
+                                             applicationId: Long,
+                                             itemNumber: Int,
+                                             goodsDescriptionCategory: String,
+                                             updateSeqNumber: Int
+                                            ): Int = {
+    Using.resource(connection.prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseCategory(?, ?, ?, ?)}")) { storedProcedure =>
+      storedProcedure.setLong("p_application_id", applicationId)
+      storedProcedure.setInt("p_item_number", itemNumber)
+      storedProcedure.setString("p_goods_description_category", goodsDescriptionCategory)
+      storedProcedure.setInt("p_update_seq_number", updateSeqNumber)
+      storedProcedure.registerOutParameter("p_update_seq_number", java.sql.Types.INTEGER)
+      storedProcedure.execute()
+      storedProcedure.getInt("p_update_seq_number")
+    }
+  }
+
+  def updatePurchaseDetails(request: uk.gov.hmrc.rdscandeproxy.euvat.models.requests.UpdatePurchaseDetailsRequest): Future[Int] = {
+    // Run the sequence of stored-proc updates on a single DB connection to avoid lost-update due to separate connections.
+    Future {
+      db.withConnection { connection =>
+        val seqAfterCategory = updatePurchaseCategoryWithConn(connection,
+                                                              request.applicationId,
+                                                              request.itemNumber,
+                                                              request.goodsDescriptionCategory,
+                                                              request.updateSequenceNumber
+                                                             )
+
+        val seqAfterDescription = request.goodsDescriptionText match {
+          case Some(text) => updatePurchaseDescriptionWithConn(connection, request.applicationId, request.itemNumber, text, seqAfterCategory)
+          case None       => seqAfterCategory
+        }
+
+        val seqAfterSubCategory = request.goodsDescriptionSubCategory match {
+          case Some(sub) => updatePurchaseSubCategoryWithConn(connection, request.applicationId, request.itemNumber, sub, seqAfterDescription)
+          case None      => seqAfterDescription
+        }
+
+        callUpdatePurchaseDetailsSPWithConn(connection, request, seqAfterSubCategory)
+      }
+    }
+  }
 }

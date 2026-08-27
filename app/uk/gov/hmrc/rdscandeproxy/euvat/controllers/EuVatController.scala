@@ -22,7 +22,7 @@ import play.api.mvc.{Action, AnyContent, ControllerComponents}
 import uk.gov.hmrc.play.bootstrap.backend.controller.BackendController
 import uk.gov.hmrc.rdscandeproxy.euvat.actions.AuthAction
 import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.*
-import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.{ApplicationResponse, DuplicateCountResponse, SupplierVrnCountResponse}
+import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.*
 import uk.gov.hmrc.rdscandeproxy.euvat.services.EuVatService
 
 import javax.inject.Inject
@@ -129,6 +129,34 @@ class EuVatController @Inject() (authorise: AuthAction, euVatService: EuVatServi
             .recover { case ex: Exception =>
               logger.error("Error while retrieving duplicate count", ex)
               InternalServerError("Failed to retrieve duplicate count")
+            }
+      }
+    }
+
+  def updatePurchaseDetails: Action[AnyContent] =
+    authorise.async { implicit request =>
+      val requestJson = request.body.asJson.map(Json.stringify).getOrElse("No JSON")
+      logger.info(s"updatePurchaseDetails request body: $requestJson")
+
+      request.body.asJson.flatMap(_.asOpt[UpdatePurchaseDetailsRequest]) match {
+        case None =>
+          logger.warn("Invalid JSON for UpdatePurchaseDetailsRequest")
+          Future.successful(BadRequest("Invalid request body"))
+        case Some(req) =>
+          euVatService
+            .updatePurchaseDetails(req)
+            .map { response =>
+              val responseJson = Json.stringify(Json.toJson(response))
+              logger.info(s"updatePurchaseDetails response body: $responseJson")
+              Ok(Json.toJson(response))
+            }
+            .recover {
+              case sqlEx: java.sql.SQLException if sqlEx.getErrorCode == 20000 =>
+                logger.warn("Concurrent update detected while updating purchase details", sqlEx)
+                Conflict("Refund application already updated by another session")
+              case ex: Exception =>
+                logger.error("Error while updating purchase details", ex)
+                InternalServerError("Failed to update purchase details")
             }
       }
     }

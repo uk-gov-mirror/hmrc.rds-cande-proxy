@@ -19,11 +19,12 @@ package uk.gov.hmrc.rdscandeproxy.euvat.services
 import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.*
 import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.{ApplicationResponse, LatestApplicationResponse, SupplierVrnCountResponse}
 import uk.gov.hmrc.rdscandeproxy.euvat.repositories.EuVatCandeRepository
+import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.UpdatePurchaseDetailsResponse
 
 import javax.inject.Inject
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
-class EuVatService @Inject() (euvatCandeRepository: EuVatCandeRepository) {
+class EuVatService @Inject() (euvatCandeRepository: EuVatCandeRepository)(implicit ec: ExecutionContext) {
 
   def getLatestApplications(request: LatestApplicationRequest): Future[LatestApplicationResponse] = {
     euvatCandeRepository.getLatestApplications(request)
@@ -40,5 +41,10 @@ class EuVatService @Inject() (euvatCandeRepository: EuVatCandeRepository) {
 
   def getSupplierTaxIdentifierDuplicateCount(request: SupplierTaxIdentifierCountRequest): Future[Int] =
     euvatCandeRepository.getSupplierTaxIdentifierDuplicateCount(request)
+
+  def updatePurchaseDetails(request: UpdatePurchaseDetailsRequest): Future[UpdatePurchaseDetailsResponse] =
+    euvatCandeRepository
+      .updatePurchaseDetails(request)
+      .map(UpdatePurchaseDetailsResponse(_))
 
 }
