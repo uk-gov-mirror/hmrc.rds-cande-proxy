@@ -453,6 +453,12 @@ class EuVatCandeRepositorySpec extends AnyFlatSpec with Matchers with BeforeAndA
     result shouldBe 7
     // expect 3 prepareCall invocations: category, description, details
     verify(mockConnection, times(3)).prepareCall(any())
+    val inOrderVerifierDesc = mockInOrder(mockConnection)
+    inOrderVerifierDesc.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseCategory(?, ?, ?, ?)}")
+    inOrderVerifierDesc.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseDescription(?, ?, ?, ?)}")
+    inOrderVerifierDesc
+      .verify(mockConnection)
+      .prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseDetails(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}")
   }
 
   "updatePurchaseDetails" should "call prepareCall three times when only subcategory present" in {
@@ -485,6 +491,12 @@ class EuVatCandeRepositorySpec extends AnyFlatSpec with Matchers with BeforeAndA
     result shouldBe 9
     // expect 3 prepareCall invocations: category, subcategory, details
     verify(mockConnection, times(3)).prepareCall(any())
+    val inOrderVerifierSub = mockInOrder(mockConnection)
+    inOrderVerifierSub.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseCategory(?, ?, ?, ?)}")
+    inOrderVerifierSub.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseSubCategory(?, ?, ?, ?)}")
+    inOrderVerifierSub
+      .verify(mockConnection)
+      .prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseDetails(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}")
   }
 
   "updatePurchaseDetails" should "rollback the transaction and propagate exception when an intermediate SP fails" in {

@@ -384,14 +384,12 @@ class EuVatCandeRepository @Inject() (@NamedDatabase("euvat") db: Database)(impl
           request.updateSequenceNumber
         )
 
-        val seqAfterSubCategory = request.goodsDescriptionSubCategory match {
-          case Some(sub) => updatePurchaseSubCategory(connection, request.applicationId, request.itemNumber, sub, seqAfterCategory)
-          case None      => seqAfterCategory
+        val seqAfterSubCategory = request.goodsDescriptionSubCategory.fold(seqAfterCategory) { sub =>
+          updatePurchaseSubCategory(connection, request.applicationId, request.itemNumber, sub, seqAfterCategory)
         }
 
-        val seqAfterDescription = request.goodsDescriptionText match {
-          case Some(text) => updatePurchaseDescription(connection, request.applicationId, request.itemNumber, text, seqAfterSubCategory)
-          case None       => seqAfterSubCategory
+        val seqAfterDescription = request.goodsDescriptionText.fold(seqAfterSubCategory) { text =>
+          updatePurchaseDescription(connection, request.applicationId, request.itemNumber, text, seqAfterSubCategory)
         }
 
         callUpdatePurchaseDetails(connection, request, seqAfterDescription)
