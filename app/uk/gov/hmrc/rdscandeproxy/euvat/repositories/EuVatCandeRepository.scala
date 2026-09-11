@@ -376,7 +376,7 @@ class EuVatCandeRepository @Inject() (@NamedDatabase("euvat") db: Database)(impl
   def updatePurchaseDetails(request: UpdatePurchaseDetailsRequest): Future[Int] = {
     Future {
       db.withTransaction { connection =>
-        val seqAfterCategory = updatePurchaseCategory(
+        val updateSequenceAfterCategoryUpdate = updatePurchaseCategory(
           connection,
           request.applicationId,
           request.itemNumber,
@@ -384,15 +384,15 @@ class EuVatCandeRepository @Inject() (@NamedDatabase("euvat") db: Database)(impl
           request.updateSequenceNumber
         )
 
-        val seqAfterSubCategory = request.goodsDescriptionSubCategory.fold(seqAfterCategory) { sub =>
-          updatePurchaseSubCategory(connection, request.applicationId, request.itemNumber, sub, seqAfterCategory)
+        val updateSequenceAfterSubCategoryUpdate = request.goodsDescriptionSubCategory.fold(updateSequenceAfterCategoryUpdate) { sub =>
+          updatePurchaseSubCategory(connection, request.applicationId, request.itemNumber, sub, updateSequenceAfterCategoryUpdate)
         }
 
-        val seqAfterDescription = request.goodsDescriptionText.fold(seqAfterSubCategory) { text =>
-          updatePurchaseDescription(connection, request.applicationId, request.itemNumber, text, seqAfterSubCategory)
+        val updateSequenceAfterDescriptionUpdate = request.goodsDescriptionText.fold(updateSequenceAfterSubCategoryUpdate) { text =>
+          updatePurchaseDescription(connection, request.applicationId, request.itemNumber, text, updateSequenceAfterSubCategoryUpdate)
         }
 
-        callUpdatePurchaseDetails(connection, request, seqAfterDescription)
+        callUpdatePurchaseDetails(connection, request, updateSequenceAfterDescriptionUpdate)
       }
     }
   }
