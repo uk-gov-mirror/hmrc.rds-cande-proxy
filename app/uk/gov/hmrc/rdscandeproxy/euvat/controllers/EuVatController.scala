@@ -172,7 +172,6 @@ class EuVatController @Inject() (authorise: AuthAction, euVatService: EuVatServi
             .updatePurchaseDetails(req)
             .map { response =>
               val responseJson = Json.stringify(Json.toJson(response))
-              logger.info(s"updatePurchaseDetails response body: $responseJson")
               Ok(Json.toJson(response))
             }
             .recover { case ex: Exception =>
