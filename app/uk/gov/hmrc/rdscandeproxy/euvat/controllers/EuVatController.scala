@@ -160,9 +160,6 @@ class EuVatController @Inject() (authorise: AuthAction, euVatService: EuVatServi
 
   def updatePurchaseDetails: Action[AnyContent] =
     authorise.async { implicit request =>
-      val requestJson = request.body.asJson.map(Json.stringify).getOrElse("No JSON")
-      logger.info(s"updatePurchaseDetails request body: $requestJson")
-
       request.body.asJson.flatMap(_.asOpt[UpdatePurchaseDetailsRequest]) match {
         case None =>
           logger.warn("Invalid JSON for UpdatePurchaseDetailsRequest")
