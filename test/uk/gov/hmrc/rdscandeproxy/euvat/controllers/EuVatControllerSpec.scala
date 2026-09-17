@@ -26,8 +26,8 @@ import play.api.libs.json.{JsObject, Json}
 import play.api.mvc.Result
 import play.api.test.Helpers.*
 import uk.gov.hmrc.rdscandeproxy.euvat.base.SpecBase
-import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.{AddPurchaseRequest, AddPurchaseResponse, ApplicationRequest, GetPurchaseDetailsRequest, LatestApplicationRequest, SupplierVrnCountRequest}
-import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.{ApplicationResponse, GetPurchaseDetailsResponse, LatestApplication, LatestApplicationResponse, SupplierVrnCountResponse}
+import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.*
+import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.*
 import uk.gov.hmrc.rdscandeproxy.euvat.services.EuVatService
 
 import java.time.LocalDateTime
@@ -282,6 +282,84 @@ class EuVatControllerSpec extends SpecBase with MockitoSugar {
         contentAsString(result) should include("Failed to retrieve duplicate count")
       }
     }
+
+    "updatePurchaseDetails" - {
+      "return 200 and a successful response when DB returns records" in new SetUp {
+        val req = UpdatePurchaseDetailsRequest(
+          applicationId               = 404,
+          itemNumber                  = 4,
+          goodsDescriptionCategory    = "10",
+          goodsDescriptionSubCategory = Some("10.4.1"),
+          goodsDescriptionText        = Some("office stationery and consumables"),
+          simplifiedInvoiceIndicator  = Some("N"),
+          supplierName                = Some("Finnish International"),
+          supplierAddress1            = Some("356 High Street"),
+          supplierAddress2            = Some("Rochdale"),
+          supplierAddress3            = Some("England"),
+          supplierVatRegNumber        = Some("500000881"),
+          supplierTaxIdentifier       = Some(""),
+          invoiceDate                 = Some(LocalDateTime.of(2026, 5, 14, 0, 0)),
+          invoiceNumber               = Some("a444"),
+          currencyCode                = Some("EUR"),
+          taxableAmount               = Some(BigDecimal(1000)),
+          vatAmount                   = Some(BigDecimal(99)),
+          deductibleVatAmount         = Some(BigDecimal(40)),
+          updateSequenceNumber        = 1
+        )
+
+        when(mockEuVatService.updatePurchaseDetails(any())).thenReturn(Future.successful(UpdatePurchaseDetailsResponse(2)))
+
+        val result: Future[Result] = controller.updatePurchaseDetails()(
+          fakeRequest.withMethod("PUT").withJsonBody(Json.toJson(req))
+        )
+
+        status(result)        shouldBe OK
+        contentAsJson(result) shouldBe Json.toJson(UpdatePurchaseDetailsResponse(2))
+      }
+
+      "return 400 when request body is missing" in new SetUp {
+        val result: Future[Result] = controller.updatePurchaseDetails()(
+          fakeRequest.withMethod("PUT")
+        )
+
+        status(result)          shouldBe BAD_REQUEST
+        contentAsString(result) shouldBe "Invalid request body"
+      }
+
+      "return 500 and log error when DB call fails" in new SetUp {
+        val exception = new RuntimeException("DB error")
+        when(mockEuVatService.updatePurchaseDetails(any())).thenReturn(Future.failed(exception))
+        val req = UpdatePurchaseDetailsRequest(
+          applicationId               = 404,
+          itemNumber                  = 4,
+          goodsDescriptionCategory    = "10",
+          goodsDescriptionSubCategory = Some("10.4.1"),
+          goodsDescriptionText        = Some("office stationery and consumables"),
+          simplifiedInvoiceIndicator  = Some("N"),
+          supplierName                = Some("Finnish International"),
+          supplierAddress1            = Some("356 High Street"),
+          supplierAddress2            = Some("Rochdale"),
+          supplierAddress3            = Some("England"),
+          supplierVatRegNumber        = Some("500000881"),
+          supplierTaxIdentifier       = Some(""),
+          invoiceDate                 = Some(LocalDateTime.of(2026, 5, 14, 0, 0)),
+          invoiceNumber               = Some("a444"),
+          currencyCode                = Some("EUR"),
+          taxableAmount               = Some(BigDecimal(1000)),
+          vatAmount                   = Some(BigDecimal(99)),
+          deductibleVatAmount         = Some(BigDecimal(40)),
+          updateSequenceNumber        = 1
+        )
+
+        val result: Future[Result] = controller.updatePurchaseDetails()(
+          fakeRequest.withMethod("PUT").withJsonBody(Json.toJson(req))
+        )
+
+        status(result)        shouldBe INTERNAL_SERVER_ERROR
+        contentAsString(result) should include("Failed to update purchase details")
+      }
+    }
+
   }
 
   private class SetUp {

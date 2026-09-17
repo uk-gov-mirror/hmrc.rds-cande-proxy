@@ -17,7 +17,7 @@
 package uk.gov.hmrc.rdscandeproxy.euvat.repositories
 
 import org.mockito.ArgumentMatchers.*
-import org.mockito.Mockito.*
+import org.mockito.Mockito.{inOrder as mockInOrder, mock, never, times, verify, when}
 import org.scalatest.BeforeAndAfter
 import org.scalatest.concurrent.ScalaFutures.convertScalaFuture
 import org.scalatest.flatspec.AnyFlatSpec
@@ -25,7 +25,7 @@ import org.scalatest.matchers.should.Matchers
 import play.api.db.Database
 import play.api.test.Helpers.{await, defaultAwaitTimeout}
 import uk.gov.hmrc.rdscandeproxy.euvat.models.requests.*
-import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.{ApplicationResponse, GetPurchaseDetailsResponse}
+import uk.gov.hmrc.rdscandeproxy.euvat.models.responses.*
 
 import java.sql.{CallableStatement, Connection, ResultSet}
 import java.time.LocalDateTime
@@ -50,6 +50,20 @@ class EuVatCandeRepositorySpec extends AnyFlatSpec with Matchers with BeforeAndA
     when(db.withConnection(any())).thenAnswer { invocation =>
       val func = invocation.getArgument(0, classOf[Connection => Any])
       func(mockConnection) // Return the result of the lambda function passed to withConnection
+    }
+
+    when(db.withTransaction(any())).thenAnswer { invocation =>
+      val func = invocation.getArgument(0, classOf[Connection => Any])
+      try {
+        val result = func(mockConnection)
+        mockConnection.commit()
+        result
+      } catch {
+        case ex: Throwable =>
+          try mockConnection.rollback()
+          catch { case _: Throwable => () }
+          throw ex
+      }
     }
 
     // When prepareCall is invoked on the connection, return the mocked callable statement
@@ -306,6 +320,226 @@ class EuVatCandeRepositorySpec extends AnyFlatSpec with Matchers with BeforeAndA
     when(mockCallableStatement.getInt("p_count")).thenReturn(4)
     val result = repository.getSupplierTaxIdentifierDuplicateCount(req).futureValue
     result shouldBe 4
+  }
+
+  "updatePurchaseDetails" should "return the updated sequence number from proc" in {
+    val req = uk.gov.hmrc.rdscandeproxy.euvat.models.requests.UpdatePurchaseDetailsRequest(
+      applicationId               = 404,
+      itemNumber                  = 4,
+      goodsDescriptionCategory    = "10",
+      goodsDescriptionSubCategory = Some("10.4.1"),
+      goodsDescriptionText        = Some("office stationery and consumables"),
+      simplifiedInvoiceIndicator  = Some("N"),
+      supplierName                = Some("Finnish International"),
+      supplierAddress1            = Some("356 High Street"),
+      supplierAddress2            = Some("Rochdale"),
+      supplierAddress3            = Some("England"),
+      supplierVatRegNumber        = Some("500000881"),
+      supplierTaxIdentifier       = Some(""),
+      invoiceDate                 = Some(LocalDateTime.of(2026, 5, 14, 0, 0)),
+      invoiceNumber               = Some("a444"),
+      currencyCode                = Some("EUR"),
+      taxableAmount               = Some(BigDecimal(1000)),
+      vatAmount                   = Some(BigDecimal(99)),
+      deductibleVatAmount         = Some(BigDecimal(40)),
+      updateSequenceNumber        = 1
+    )
+
+    // Mock output parameter for update sequence
+    when(mockCallableStatement.getInt("p_update_seq_number")).thenReturn(2)
+
+    val result = repository.updatePurchaseDetails(req).futureValue
+
+    result shouldBe 2
+  }
+
+  "updatePurchaseDetails" should "use a single DB connection and call prepareCall for each SP" in {
+    val req = uk.gov.hmrc.rdscandeproxy.euvat.models.requests.UpdatePurchaseDetailsRequest(
+      applicationId               = 404,
+      itemNumber                  = 4,
+      goodsDescriptionCategory    = "10",
+      goodsDescriptionSubCategory = Some("10.4.1"),
+      goodsDescriptionText        = Some("office stationery and consumables"),
+      simplifiedInvoiceIndicator  = Some("N"),
+      supplierName                = Some("Finnish International"),
+      supplierAddress1            = Some("356 High Street"),
+      supplierAddress2            = Some("Rochdale"),
+      supplierAddress3            = Some("England"),
+      supplierVatRegNumber        = Some("500000881"),
+      supplierTaxIdentifier       = Some(""),
+      invoiceDate                 = Some(LocalDateTime.of(2026, 5, 14, 0, 0)),
+      invoiceNumber               = Some("a444"),
+      currencyCode                = Some("EUR"),
+      taxableAmount               = Some(BigDecimal(1000)),
+      vatAmount                   = Some(BigDecimal(99)),
+      deductibleVatAmount         = Some(BigDecimal(40)),
+      updateSequenceNumber        = 1
+    )
+
+    when(mockCallableStatement.getInt("p_update_seq_number")).thenReturn(2)
+
+    val result = repository.updatePurchaseDetails(req).futureValue
+
+    result shouldBe 2
+    verify(mockConnection, times(4)).prepareCall(any())
+    val inOrderVerifier = mockInOrder(mockConnection)
+    inOrderVerifier.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseCategory(?, ?, ?, ?)}")
+    inOrderVerifier.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseSubCategory(?, ?, ?, ?)}")
+    inOrderVerifier.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseDescription(?, ?, ?, ?)}")
+    inOrderVerifier
+      .verify(mockConnection)
+      .prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseDetails(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}")
+  }
+
+  "updatePurchaseDetails" should "call prepareCall twice when optional description/subcategory absent" in {
+    val req = uk.gov.hmrc.rdscandeproxy.euvat.models.requests.UpdatePurchaseDetailsRequest(
+      applicationId               = 404,
+      itemNumber                  = 4,
+      goodsDescriptionCategory    = "10",
+      goodsDescriptionSubCategory = None,
+      goodsDescriptionText        = None,
+      simplifiedInvoiceIndicator  = Some("N"),
+      supplierName                = Some("Finnish International"),
+      supplierAddress1            = Some("356 High Street"),
+      supplierAddress2            = Some("Rochdale"),
+      supplierAddress3            = Some("England"),
+      supplierVatRegNumber        = Some("500000881"),
+      supplierTaxIdentifier       = Some(""),
+      invoiceDate                 = Some(LocalDateTime.of(2026, 5, 14, 0, 0)),
+      invoiceNumber               = Some("a444"),
+      currencyCode                = Some("EUR"),
+      taxableAmount               = Some(BigDecimal(1000)),
+      vatAmount                   = Some(BigDecimal(99)),
+      deductibleVatAmount         = Some(BigDecimal(40)),
+      updateSequenceNumber        = 1
+    )
+
+    when(mockCallableStatement.getInt("p_update_seq_number")).thenReturn(5)
+
+    val result = repository.updatePurchaseDetails(req).futureValue
+
+    result shouldBe 5
+    // expect 2 prepareCall invocations: category and details
+    verify(mockConnection, times(2)).prepareCall(any())
+  }
+
+  "updatePurchaseDetails" should "call prepareCall three times when only description present" in {
+    val req = uk.gov.hmrc.rdscandeproxy.euvat.models.requests.UpdatePurchaseDetailsRequest(
+      applicationId               = 404,
+      itemNumber                  = 4,
+      goodsDescriptionCategory    = "10",
+      goodsDescriptionSubCategory = None,
+      goodsDescriptionText        = Some("office stationery and consumables"),
+      simplifiedInvoiceIndicator  = Some("N"),
+      supplierName                = Some("Finnish International"),
+      supplierAddress1            = Some("356 High Street"),
+      supplierAddress2            = Some("Rochdale"),
+      supplierAddress3            = Some("England"),
+      supplierVatRegNumber        = Some("500000881"),
+      supplierTaxIdentifier       = Some(""),
+      invoiceDate                 = Some(LocalDateTime.of(2026, 5, 14, 0, 0)),
+      invoiceNumber               = Some("a444"),
+      currencyCode                = Some("EUR"),
+      taxableAmount               = Some(BigDecimal(1000)),
+      vatAmount                   = Some(BigDecimal(99)),
+      deductibleVatAmount         = Some(BigDecimal(40)),
+      updateSequenceNumber        = 1
+    )
+
+    when(mockCallableStatement.getInt("p_update_seq_number")).thenReturn(7)
+
+    val result = repository.updatePurchaseDetails(req).futureValue
+
+    result shouldBe 7
+    // expect 3 prepareCall invocations: category, description, details
+    verify(mockConnection, times(3)).prepareCall(any())
+    val inOrderVerifierDesc = mockInOrder(mockConnection)
+    inOrderVerifierDesc.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseCategory(?, ?, ?, ?)}")
+    inOrderVerifierDesc.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseDescription(?, ?, ?, ?)}")
+    inOrderVerifierDesc
+      .verify(mockConnection)
+      .prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseDetails(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}")
+  }
+
+  "updatePurchaseDetails" should "call prepareCall three times when only subcategory present" in {
+    val req = uk.gov.hmrc.rdscandeproxy.euvat.models.requests.UpdatePurchaseDetailsRequest(
+      applicationId               = 404,
+      itemNumber                  = 4,
+      goodsDescriptionCategory    = "10",
+      goodsDescriptionSubCategory = Some("10.4.1"),
+      goodsDescriptionText        = None,
+      simplifiedInvoiceIndicator  = Some("N"),
+      supplierName                = Some("Finnish International"),
+      supplierAddress1            = Some("356 High Street"),
+      supplierAddress2            = Some("Rochdale"),
+      supplierAddress3            = Some("England"),
+      supplierVatRegNumber        = Some("500000881"),
+      supplierTaxIdentifier       = Some(""),
+      invoiceDate                 = Some(LocalDateTime.of(2026, 5, 14, 0, 0)),
+      invoiceNumber               = Some("a444"),
+      currencyCode                = Some("EUR"),
+      taxableAmount               = Some(BigDecimal(1000)),
+      vatAmount                   = Some(BigDecimal(99)),
+      deductibleVatAmount         = Some(BigDecimal(40)),
+      updateSequenceNumber        = 1
+    )
+
+    when(mockCallableStatement.getInt("p_update_seq_number")).thenReturn(9)
+
+    val result = repository.updatePurchaseDetails(req).futureValue
+
+    result shouldBe 9
+    // expect 3 prepareCall invocations: category, subcategory, details
+    verify(mockConnection, times(3)).prepareCall(any())
+    val inOrderVerifierSub = mockInOrder(mockConnection)
+    inOrderVerifierSub.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseCategory(?, ?, ?, ?)}")
+    inOrderVerifierSub.verify(mockConnection).prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseSubCategory(?, ?, ?, ?)}")
+    inOrderVerifierSub
+      .verify(mockConnection)
+      .prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.updatePurchaseDetails(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}")
+  }
+
+  "updatePurchaseDetails" should "rollback the transaction and propagate exception when an intermediate SP fails" in {
+    val req = UpdatePurchaseDetailsRequest(
+      applicationId               = 404,
+      itemNumber                  = 4,
+      goodsDescriptionCategory    = "10",
+      goodsDescriptionSubCategory = Some("10.4.1"),
+      goodsDescriptionText        = Some("office stationery and consumables"),
+      simplifiedInvoiceIndicator  = Some("N"),
+      supplierName                = Some("Finnish International"),
+      supplierAddress1            = Some("356 High Street"),
+      supplierAddress2            = Some("Rochdale"),
+      supplierAddress3            = Some("England"),
+      supplierVatRegNumber        = Some("500000881"),
+      supplierTaxIdentifier       = Some(""),
+      invoiceDate                 = Some(LocalDateTime.of(2026, 5, 14, 0, 0)),
+      invoiceNumber               = Some("a444"),
+      currencyCode                = Some("EUR"),
+      taxableAmount               = Some(BigDecimal(1000)),
+      vatAmount                   = Some(BigDecimal(99)),
+      deductibleVatAmount         = Some(BigDecimal(40)),
+      updateSequenceNumber        = 1
+    )
+
+    val cs1 = mock(classOf[CallableStatement])
+    val cs2 = mock(classOf[CallableStatement])
+    val cs3 = mock(classOf[CallableStatement])
+    val cs4 = mock(classOf[CallableStatement])
+
+    when(mockConnection.prepareCall(any())).thenReturn(cs1, cs2, cs3, cs4)
+
+    when(cs1.getInt("p_update_seq_number")).thenReturn(2)
+    when(cs2.execute()).thenThrow(new java.sql.SQLException("SP failure"))
+
+    val thrown = intercept[Exception] {
+      repository.updatePurchaseDetails(req).futureValue
+    }
+
+    thrown.getMessage should include("SP failure")
+
+    verify(mockConnection).rollback()
+    verify(mockConnection, never()).commit()
   }
 
 }

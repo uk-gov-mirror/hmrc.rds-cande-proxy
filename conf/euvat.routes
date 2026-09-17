@@ -6,3 +6,4 @@ POST    /add-purchase                       uk.gov.hmrc.rdscandeproxy.euvat.cont
 POST    /get-purchase-details               uk.gov.hmrc.rdscandeproxy.euvat.controllers.EuVatController.getPurchaseDetails
 POST    /get-supplier-vrn-count             uk.gov.hmrc.rdscandeproxy.euvat.controllers.EuVatController.getSupplierVrnCount
 POST    /get-supplier-taxIdentifier-count   uk.gov.hmrc.rdscandeproxy.euvat.controllers.EuVatController.getSupplierTaxIdentifierCount
+PUT     /update-purchase-details            uk.gov.hmrc.rdscandeproxy.euvat.controllers.EuVatController.updatePurchaseDetails
