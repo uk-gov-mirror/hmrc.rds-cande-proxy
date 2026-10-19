@@ -705,6 +705,33 @@ class EuVatCandeRepositorySpec extends AnyWordSpec with Matchers with BeforeAndA
     }
   }
 
+  "deleteImport" should {
+    "call the deleteImportationDetails stored procedure with correct params" in {
+      val req = DeleteImportRequest(applicationId = 404L, itemNumber = 4, updateSequenceNumber = 1)
+
+      when(mockCallableStatement.getInt("p_update_seq_number")).thenReturn(2)
+
+      val result = repository.deleteImport(req).futureValue
+      result shouldBe 2
+
+      verify(mockConnection).prepareCall(any())
+      verify(mockCallableStatement).setLong("p_application_id", 404L)
+      verify(mockCallableStatement).setInt("p_item_number", 4)
+      verify(mockCallableStatement).setInt("p_update_seq_number", 1)
+      verify(mockCallableStatement).execute()
+    }
+
+    "propagate exception when stored procedure fails" in {
+      val req = DeleteImportRequest(applicationId = 999L, itemNumber = 5, updateSequenceNumber = 3)
+
+      when(mockCallableStatement.execute()).thenThrow(new RuntimeException("SP failure"))
+
+      intercept[RuntimeException] {
+        repository.deleteImport(req).futureValue
+      }
+    }
+  }
+
   "updateApplicationDetails" should {
     "call language then details, chaining the update sequence number" in {
       val req = UpdateApplicationDetailsRequest(

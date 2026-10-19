@@ -259,6 +259,24 @@ class EuVatCandeRepository @Inject() (@NamedDatabase("euvat") db: Database)(impl
     }
   }
 
+  def deleteImport(request: DeleteImportRequest): Future[Int] = {
+    logger.info(s"Calling stored procedure deleteImportationDetails for applicationId: ${request.applicationId} itemNumber: ${request.itemNumber}")
+    Future {
+      db.withConnection { connection =>
+        Using.resource(
+          connection.prepareCall("{call EUVAT_FILE_DATA.EU_VAT_UPDATE.deleteImportationDetails(?, ?, ?)}")
+        ) { storedProcedure =>
+          storedProcedure.setLong("p_application_id", request.applicationId)
+          storedProcedure.setInt("p_item_number", request.itemNumber)
+          storedProcedure.setInt("p_update_seq_number", request.updateSequenceNumber)
+          storedProcedure.registerOutParameter("p_update_seq_number", java.sql.Types.NUMERIC)
+          storedProcedure.execute()
+          storedProcedure.getInt("p_update_seq_number")
+        }
+      }
+    }
+  }
+
   def getPurchaseDetails(request: GetPurchaseDetailsRequest): Future[Option[GetPurchaseDetailsResponse]] = {
     logger.info(
       s"Calling stored procedure getPurchaseDetails for applicationId: ${request.applicationId} itemNumber: ${request.itemNumber}"

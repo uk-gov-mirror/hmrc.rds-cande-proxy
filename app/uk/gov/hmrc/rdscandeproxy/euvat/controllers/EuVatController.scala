@@ -302,4 +302,22 @@ class EuVatController @Inject() (authorise: AuthAction, euVatService: EuVatServi
         }
     }
 
+  def deleteImport: Action[AnyContent] =
+    authorise.async { implicit request =>
+      request.body.asJson.flatMap(_.asOpt[DeleteImportRequest]) match {
+        case None =>
+          logger.warn("Invalid JSON for DeleteImportRequest")
+          Future.successful(BadRequest("Invalid request body"))
+        case Some(req) =>
+          euVatService
+            .deleteImport(req)
+            .map { response =>
+              Ok(Json.toJson(response))
+            }
+            .recover { case ex: Exception =>
+              logger.error("Error while deleting the import", ex)
+              InternalServerError("Failed to delete import")
+            }
+      }
+    }
 }

@@ -31,7 +31,7 @@ import java.time.LocalDateTime
 import scala.concurrent.ExecutionContext.global
 import scala.concurrent.{ExecutionContext, Future}
 
-class EuVatServiceSpec extends AnyWordSpec with Matchers with ScalaFutures with MockitoSugar with IntegrationPatience:
+class EuVatServiceSpec extends AnyWordSpec with Matchers with ScalaFutures with MockitoSugar with IntegrationPatience {
 
   implicit val ec: ExecutionContext = global
   private val mockConnector = mock[EuVatCandeRepository]
@@ -452,3 +452,21 @@ class EuVatServiceSpec extends AnyWordSpec with Matchers with ScalaFutures with 
         val result = intercept[Exception](service.getSadReferenceCount(sampleRequest).futureValue)
         result.getMessage should include("bang")
   }
+
+  "EuVatService.deleteImport" should {
+    val req = DeleteImportRequest(applicationId = 404L, itemNumber = 4, updateSequenceNumber = 1)
+
+    "succeed" in {
+      when(mockConnector.deleteImport(any())).thenReturn(Future.successful(2))
+      val result = service.deleteImport(req).futureValue
+      result shouldBe DeleteImportResponse(2)
+    }
+
+    "fail" in {
+      when(mockConnector.deleteImport(any())).thenReturn(Future.failed(new Exception("bang")))
+      val result = intercept[Exception](service.deleteImport(req).futureValue)
+      result.getMessage should include("bang")
+    }
+  }
+
+}
